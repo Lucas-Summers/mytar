@@ -8,6 +8,20 @@
 #define LFLAG '2'
 #define DFLAG '5'
 
+#define PATH_MAX_ 256
+#define NAME_MAX_ 100
+#define UGNAME_MAX 32
+#define ID_MAX 07777777
+#define MTIME_MAX 12
+
+#define SIZE_SIZE 12
+#define ID_SIZE 8
+
+#define MODE_MASK 07777
+
+/* all fields are made chars so we dont get warnings when using
+ * functions like sprintf which expect a char
+ */
 struct __attribute__ ((__packed__)) tarheader {
     char name[100];
     char mode[8];
@@ -25,7 +39,7 @@ struct __attribute__ ((__packed__)) tarheader {
     char devmajor[8];
     char devminor[8];
     char prefix[155];
-    char pad[12]; /* make the struct 512 bytes */
+    char pad[12]; /* make the struct perfectly 512 bytes */
 };
 
 int calculate_checksum(unsigned char *head);

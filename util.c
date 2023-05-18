@@ -1,3 +1,9 @@
+/*
+ * file: util.c
+ *
+ * helper functions used by all of the modes
+ */
+
 #include <arpa/inet.h> 
 #include <string.h>
 #include <stdint.h>
@@ -7,13 +13,18 @@
 #define CHKSUM_BEGIN 148
 #define CHKSUM_END 155
 
+/*
+ * calculate the chksum field for the header
+ */
 int calculate_checksum(unsigned char *head) {
     int i, sum = 0;
 
     for (i = 0; i < sizeof(struct tarheader); i++) {
+        /* not in the chksum field? add each byte to the sum
         if (i < CHKSUM_BEGIN || i > CHKSUM_END) {
             sum += *(head+i);
         } else {
+            /* skip the chksum field and just put in spaces*/
             sum += ' ';
         }
     }
@@ -21,6 +32,7 @@ int calculate_checksum(unsigned char *head) {
     return sum;
 }
 
+/* given by assignment */
 uint32_t extract_special_int(char *where, int len) {
     /* For interoperability with GNU tar. GNU seems to
     * set the high–order bit of the first byte, then
@@ -39,6 +51,7 @@ uint32_t extract_special_int(char *where, int len) {
     return val;
 }
 
+/* given by assignment */
 int insert_special_int(char *where, size_t size, int32_t val) { 
     /* For interoperability with GNU tar. GNU seems to
     * set the high–order bit of the first byte, then
