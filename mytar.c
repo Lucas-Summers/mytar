@@ -14,9 +14,11 @@
 #include "list.h"
 #include "extract.h"
 
-#define OPS 1
 #define OPSMIN 2
 #define OPSMAX 4
+
+/* for position in argv */
+#define OPS 1
 #define TFILE 2
 #define PATHS 3
 
@@ -45,8 +47,9 @@ int main(int argc, char *argv[]) {
         print_usage(); 
     }
     
-    /* last op must be f and v or S are optional */
+    /* loop through rest of args and check for v or S */
     for(i = 1; argv[OPS][i] != 'f'; i++) {
+        /* last op must be f */
         if (argv[1][i] == '\0') {
             print_usage();
         } else if (argv[OPS][i] == 'v') {

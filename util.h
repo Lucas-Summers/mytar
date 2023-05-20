@@ -2,7 +2,6 @@
 #define _UTIL_H
 #include <stdint.h>
 
-#define BLOCK 512
 #define RFLAG '0'
 #define RFLAG_ALT '\0'
 #define LFLAG '2'
@@ -12,12 +11,29 @@
 #define NAME_MAX_ 100
 #define UGNAME_MAX 32
 #define ID_MAX 07777777
-#define MTIME_MAX 12
+#define SIZE_MAX_ 077777777777
+#define MTIME_MAX 077777777777
+#define LINK_MAX 100
 
+#define BLOCK 512
+#define MTIME_SIZE 12
 #define SIZE_SIZE 12
 #define ID_SIZE 8
+#define PERM_STRLEN 10
+#define MTIME_STRLEN 16
+#define OWNER_STRLEN 64
+#define VERSION_SIZE 2
+#define MAGIC_SIZE 5
+
+#define EMPTY_CHKSUM 256
+#define CHKSUM_BEGIN 148
+#define CHKSUM_END 155
+#define OCTAL 8
+
 
 #define MODE_MASK 07777
+#define PERM_MASK 256
+#define SPECIAL_INT_MASK 0x800000
 
 /* all fields are made chars so we dont get warnings when using
  * functions like sprintf which expect a char

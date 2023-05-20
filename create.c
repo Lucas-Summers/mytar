@@ -2,9 +2,10 @@
  * file: create.c
  * 
  * create mode for mytar (specified by the c argument)
+ *
  * if the archive file exists, it is truncated to zero length
  *
- * then all the remaining arguments on the command line are taken as paths to 
+ * Then all the remaining arguments on the command line are taken as paths to 
  * be added to the archive
  *
  * If a given path is a directory, 
@@ -79,10 +80,10 @@ int write_header(int tarfile, char *path, struct stat *st,
     /* else, we put the path into the prefix and filename in the name */
     } else {
         /* find the index to split the path by */
-        i = (strlen(path) - 1) + NAME_MAX_;
+        i = (strlen(path) - 1) - NAME_MAX_;
         while (path[i] != '/') {
             if (path[i] == 0) {
-               fprintf(stderr, "%s: path too long\n", path);
+               fprintf(stderr, "%s: path cannot be partitioned\n", path);
                return -1;
             }
             i++;
@@ -129,7 +130,7 @@ int write_header(int tarfile, char *path, struct stat *st,
     if (S_ISREG(st->st_mode)) {
         /* set type flag to '0' */
         head.typeflag[0] = (char)RFLAG;
-        if (st->st_size > SIZE_MAX) {
+        if (st->st_size > SIZE_MAX_) {
             /* if S arg, return an error 
              * else, just use gnu tar special int
              */
@@ -139,7 +140,7 @@ int write_header(int tarfile, char *path, struct stat *st,
             }
             insert_special_int(head.size, SIZE_SIZE, st->st_size);
         } else {
-            sprintf(head.size, "%011o", (int) st->st_size);
+            sprintf(head.size, "%011o", (int)st->st_size);
         }
     /* is file symlink? */
     } else if (S_ISLNK(st->st_mode)) {
@@ -163,7 +164,7 @@ int write_header(int tarfile, char *path, struct stat *st,
             fprintf(stderr, "%s: mtime too large\n", path);
             return -1;
         }
-        insert_special_int(head.mtime, MTIME_MAX, st->st_mtime);
+        insert_special_int(head.mtime, MTIME_SIZE, st->st_mtime);
     } else {
         sprintf(head.mtime, "%011o", (int)st->st_mtime);
     }
@@ -225,6 +226,7 @@ void write_tar(int tarfile, char *path, int verbose, int strict) {
     DIR *dir;
     struct dirent *dirp;
     char *path_new;
+    char temp[LINK_MAX];
 
     /* to be used when writing the header */
     if (lstat(path, &st) == -1) {
@@ -236,9 +238,10 @@ void write_tar(int tarfile, char *path, int verbose, int strict) {
      * then write the header and its data in blocks
      */
     if (S_ISREG(st.st_mode)) {
+        /* skip writing file if we can't open for reading */
         if ((infile = open(path, O_RDONLY)) == -1) {
             perror(path);
-            exit(1);
+            return;
         }
 
         /* clear the buf so if file doesn't fit perfectly into block
@@ -268,6 +271,11 @@ void write_tar(int tarfile, char *path, int verbose, int strict) {
      * just write the header, all the data is in the linkname
      */
     } else if (S_ISLNK(st.st_mode)) {
+        /* skip writing link if we cannot open */
+        if (readlink(path, temp, LINK_MAX) == -1) {
+            perror(path);
+            return;
+        }
         write_header(tarfile, path, &st, verbose, strict); 
     /* is file a dir?
      * write the header then recurse on all the entries
@@ -284,14 +292,16 @@ void write_tar(int tarfile, char *path, int verbose, int strict) {
             exit(1);
         }
         
+        /* skip writing dir to archive if cannot open */
+        if ((dir = opendir(path)) == NULL) {
+            perror(path);
+            return;
+        }
+
         /* add add slash to match mytar*/
         strcat(path, "/");
         write_header(tarfile, path, &st, verbose, strict);
         
-        if ((dir = opendir(path)) == NULL) {
-            perror(path);
-            exit(1);
-        }
         
         /* go through all directory entries and recurse */
         while ((dirp = readdir(dir)) != NULL) {
@@ -313,7 +323,7 @@ void write_tar(int tarfile, char *path, int verbose, int strict) {
 }
 
 /* 
- * the create command mode  accessed by the main function
+ * the create command mode accessed by the main function
  */
 void create(char *filename, char **paths, int npaths, int verbose, int strict) {
     int tarfile;
