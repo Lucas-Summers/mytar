@@ -198,7 +198,6 @@ void extract_directory(int fd, const struct tarheader* header, char* filePath) {
 
 
 
-
 /* Function to extract files from a tar archive */
 int extract(char* fileName, char* directories[], int numDirectories, 
 int verboseBool, int strictBool) {
@@ -208,6 +207,7 @@ int verboseBool, int strictBool) {
     struct tarheader headerBuffer;
     /* Number of bytes read from the archive */
     int bytesRead;
+    int i;
 
     /* Open the tar archive */
     fd = open(fileName, O_RDONLY);
@@ -319,8 +319,8 @@ int verboseBool, int strictBool) {
 
         /* Instead of calling utime() immediately after extraction, 
  *          * add a new deferred operation to the list. */
-        struct deferred_utime_operation* op =
- malloc(sizeof(struct deferred_utime_operation));
+        struct deferred_utime_operation* op = 
+        malloc(sizeof(struct deferred_utime_operation));
         if (op == NULL) {
             perror("Couldn't malloc op");
             exit(EXIT_FAILURE);
@@ -332,8 +332,8 @@ int verboseBool, int strictBool) {
         }
         op->newTime = newTime;
 
-        deferred_ops = realloc(deferred_ops,
- (deferred_ops_count + 1) * sizeof(*deferred_ops));
+        deferred_ops = realloc(deferred_ops, (deferred_ops_count + 1) *
+        sizeof(*deferred_ops));
         if (deferred_ops == NULL) {
             perror("Couldn't realloc deferred_ops");
             exit(EXIT_FAILURE);
@@ -347,8 +347,7 @@ int verboseBool, int strictBool) {
 
     /* Now that all files and symbolic links have been created, 
  *      * perform the deferred utime operations */
-    int i;    
-for (i = 0; i < deferred_ops_count; i++) {
+    for (i = 0; i < deferred_ops_count; i++) {
         if (utime(deferred_ops[i]->path, &(deferred_ops[i]->newTime))) {
             perror("Couldn't set utime");
             exit(errno);
