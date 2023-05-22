@@ -90,7 +90,7 @@ int main(int argc, char *argv[]) {
             list(file, paths, i, verbose, strict);
             break;
         case 'x':
-            /* extract(file, paths, i, verbose, strict); */
+            extract(file, paths, i, verbose, strict); 
             break;
     }
 

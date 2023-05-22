@@ -1,2 +1,366 @@
-test
+#include <errno.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <utime.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include "util.h"
+
+#define BASE_OCTAL 8
+#define BLOCK_SIZE 512
+#define REGULAR_FILE_FLAG '0'
+#define ALT_REGULAR_FILE_FLAG '\0'
+#define SYM_LINK_FLAG '2'
+#define DIRECTORY_FLAG '5'
+#define MAX_FILENAME_LEN 100
+#define MAX_PATH_PREFIX_LEN 155
+#define MAX_SYMLINK_LEN 100
+#define PATH_PREFIX_LEN 3
+
+struct deferred_utime_operation {
+    char* path;
+    struct utimbuf newTime;
+};
+
+void check_dirs(char *path);
+void extract_file_content(int infile, int outfile, size_t file_size);
+void extract_reg_file(int fd, const struct tarheader* header, char* filePath);
+void extract_symb_link(int fd, struct tarheader* header, char* filePath);
+void extract_directory(int fd, const struct tarheader* header, char* filePath);
+
+
+
+/* Function to create all necessary directories along a given path */
+void check_dirs(char *path) {
+    int idx;
+    char *cpy;
+    /* Define default permissions */
+    mode_t perms = S_IRWXU | S_IRWXG | S_IROTH;
+
+    errno = 0;
+    /* Allocate memory for a copy of the path */
+    cpy = (char *)malloc((strlen(path) + 1) * sizeof(char));
+    /* If allocation fails, output an error and exit */
+    if (cpy == NULL) {
+        perror("malloc failed in check_dirs");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Copy the path to the allocated memory */
+    strcpy(cpy, path);
+
+    /* Iterate over the copy of the path */
+    for (idx = 0; cpy[idx]; idx++) {
+        /* If a directory separator is found */
+        if (cpy[idx] == '/') {
+            /* If it's the last character in the path, clean up and return */
+            if (idx >= strlen(path) - 1) {
+                free(cpy);
+                return;
+            }
+            /* Temporarily end the string at the current directory level */
+            cpy[idx] = '\0';
+    /* Try to create the directory; it's not an error if it already exists */
+            if (mkdir(cpy, perms) && errno != EEXIST) {
+                perror("Couldn't mkdir");
+                exit(errno);
+            }
+            /* Restore the directory separator */
+            cpy[idx] = '/';
+        }
+    }
+
+    /* Clean up the copy of the path */
+    free(cpy);
+    return;
+}
+
+/* Function to extract file content from an archive */
+void extract_file_content(int infile, int outfile, size_t file_size) {
+    /* Buffer to hold file content */
+    char *buff;
+    
+    /* Compute padding needed for the file content, based on BLOCK_SIZE */
+    size_t padding = file_size % BLOCK_SIZE;
+
+    errno = 0;
+    
+    /* Allocate memory for the buffer according to file size */
+    buff = malloc(sizeof(char) * file_size);
+    
+    /* If memory allocation fails, output error and exit */
+    if (buff == NULL) {
+        perror("Couldn't allocate memory for buffer");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Read file content from the archive into the buffer */
+    if (read(infile, buff, file_size) == -1) {
+        perror("Couldn't read from archive");
+        exit(errno);
+    }
+
+    /* Write the read file content from the buffer to the output file */
+    if (write(outfile, buff, file_size) == -1) {
+        perror("Couldn't write file");
+        exit(errno);
+    }
+
+    /* Skip padding bytes in the input file, to align with the BLOCK_SIZE */
+    if (lseek(infile, BLOCK_SIZE - padding, SEEK_CUR) == -1) {
+        perror("lseek padding of file content failed");
+        exit(errno);
+    }
+
+    /* Free up the memory used by the buffer */
+    free(buff);
+    return;
+}
+
+
+
+
+/* Function to extract a regular file from an archive */
+void extract_reg_file(int fd, const struct tarheader* header, char* filePath) {
+    /* File descriptor for the new file */
+    int new_file;
+    /* Variable to store permissions for the new file */
+    mode_t permissions;
+
+    /* Convert file permissions from octal string to mode_t */
+    permissions = (mode_t)strtol(header->mode, NULL, BASE_OCTAL);
+
+    errno = 0;
+    /* Open the new file with the given permissions,
+ *  *   creating it if it doesn't exist and truncating it if it does */
+    new_file = open(filePath, O_RDWR | O_CREAT | O_TRUNC, permissions);
+    if (new_file == -1) {
+        perror("open");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Extract file content from the archive and write to the new file */
+    extract_file_content(fd, new_file, strtol(header->size, NULL, BASE_OCTAL));
+    /* Close the new file */
+    close(new_file);
+}
+
+
+
+
+
+void extract_symb_link(int fd, struct tarheader* header, char* filePath) {
+    /* Buffer to hold the target of the symbolic link */
+    char* linkValue;
+
+    errno = 0;
+    /* Allocate memory for the linkValue buffer */
+    linkValue = calloc(MAX_SYMLINK_LEN + 1, sizeof(char));
+    if (linkValue == NULL) {
+        perror("Couldn't allocate memory for linkValue");
+        exit(EXIT_FAILURE);
+    }
+
+    /* Copy the target of the symbolic link from the header to the buffer */
+    strncpy(linkValue, (char *)&header->linkname, MAX_SYMLINK_LEN);
+
+    errno = 0;
+    /* Create the symbolic link */
+    if (symlink(linkValue, filePath) && errno != EEXIST) {
+        perror("Couldn't create symlink");
+        exit(errno);
+    }
+
+    /* Free up the memory used by the buffer */
+    free(linkValue);
+
+    
+}
+
+
+/* Function to extract a directory from an archive */
+void extract_directory(int fd, const struct tarheader* header, char* filePath) {
+    /* Variable to store permissions for the new directory */
+    mode_t permissions = (mode_t)strtol(header->mode, NULL, BASE_OCTAL);
+
+    errno = 0;
+    /* Create the new directory with the given permissions */
+    if (mkdir(filePath, permissions) && errno != EEXIST) {
+        perror("Couldn't mkdir");
+        exit(errno);
+    }
+}
+
+
+
+
+
+
+/* Function to extract files from a tar archive */
+int extract(char* fileName, char* directories[], int numDirectories, 
+int verboseBool, int strictBool) {
+    /* File descriptor of the tar archive */
+    int fd;
+    /* Buffer to store a tar header */
+    struct tarheader headerBuffer;
+    /* Number of bytes read from the archive */
+    int bytesRead;
+
+    /* Open the tar archive */
+    fd = open(fileName, O_RDONLY);
+    if (fd == -1) {
+        perror("open");
+        exit(EXIT_FAILURE);
+    }
+
+    /* List to hold deferred utime operations */
+    struct deferred_utime_operation** deferred_ops = NULL;
+    int deferred_ops_count = 0;
+
+    /* Read from the tar archive until there's nothing left to read */
+    while ((bytesRead = read(fd, &headerBuffer, sizeof(struct tarheader))) > 0){
+        /* Variables to store file size, file type, file path,
+ *          * and a path with no leading "./" */
+        unsigned long int fileSize;
+        unsigned char typeFlag = headerBuffer.typeflag[0];
+        char* filePath;
+        char* pathNoLead;
+
+        /* Convert file size from octal string to unsigned long int */
+        fileSize = strtol(headerBuffer.size, NULL, BASE_OCTAL);
+
+        /* Allocate memory for the file path */
+        filePath = calloc(MAX_FILENAME_LEN + MAX_PATH_PREFIX_LEN + 
+        PATH_PREFIX_LEN, sizeof(char));
+        if (filePath == NULL) {
+            perror("Couldn't calloc filePath");
+            exit(EXIT_FAILURE);
+        }
+
+  /* Build the file path from the tar header */
+        strcat(filePath, "./");
+        if (headerBuffer.prefix[0]) {
+            strncat(filePath, (char*)&headerBuffer.prefix, MAX_PATH_PREFIX_LEN);
+            strcat(filePath, "/");
+        }
+        strncat(filePath, (char*)&headerBuffer.name, MAX_FILENAME_LEN);
+
+        /* Remove leading "./" from the path */
+        pathNoLead = filePath + 2;
+
+        /* If directories are specified, 
+ *  *      check if the file is in one of the directories */
+        if (directories) {
+            int i;
+            int inDirectoriesBool = 0;
+            for (i = 0; i < numDirectories; i++) {
+                int pathLength = strlen(directories[i]);
+                if (strncmp(pathNoLead, directories[i], pathLength) == 0) {
+                    inDirectoriesBool = 1;
+                    break;
+                }
+            }
+            /* If the file is not in the directories, skip to the next header */
+            if (!inDirectoriesBool) {
+                if (fileSize > 0) {
+                    if (lseek(fd, (fileSize / BLOCK_SIZE + 1) * BLOCK_SIZE,
+                              SEEK_CUR) == -1) {
+                        perror("Couldn't lseek to next header");
+                        exit(errno);
+                    }
+                }
+                free(filePath);
+                continue;
+            }
+        }
+
+        /* If verbose mode is on, print the file path */
+        if (verboseBool) {
+            printf("%s", filePath);
+        }
+
+        /* Ensure that the directories in the path exist */
+        check_dirs(pathNoLead);
+
+        /* Extract the file based on its type */
+        switch (typeFlag) {
+            case ALT_REGULAR_FILE_FLAG:
+            case REGULAR_FILE_FLAG:
+                extract_reg_file(fd, &headerBuffer, filePath);
+                break; 
+            case DIRECTORY_FLAG:
+                extract_directory(fd, &headerBuffer, filePath);
+                break;
+            case SYM_LINK_FLAG:
+                extract_symb_link(fd, &headerBuffer, filePath);
+                break;
+
+            default:
+                fprintf(stderr, "Invalid typeflag! '%c'", typeFlag);
+                exit(EXIT_FAILURE);
+        }
+
+        /* Variables to hold file stats and new access/modification times */
+        struct stat statBuffer;
+        struct utimbuf newTime;
+        /* Get file stats */
+        if (lstat(filePath, &statBuffer)) {
+            perror("Failed to stat created file!");
+            exit(errno);
+        }
+
+        /* Set new access time to the old one and
+ *          * new modification time to the one from the tar header */
+        newTime.actime = statBuffer.st_atime;
+        newTime.modtime = strtol(headerBuffer.mtime, NULL, BASE_OCTAL);
+
+        /* Instead of calling utime() immediately after extraction, 
+ *          * add a new deferred operation to the list. */
+        struct deferred_utime_operation* op =
+ malloc(sizeof(struct deferred_utime_operation));
+        if (op == NULL) {
+            perror("Couldn't malloc op");
+            exit(EXIT_FAILURE);
+        }
+        op->path = strdup(filePath);
+        if (op->path == NULL) {
+            perror("Couldn't strdup filePath");
+            exit(EXIT_FAILURE);
+        }
+        op->newTime = newTime;
+
+        deferred_ops = realloc(deferred_ops,
+ (deferred_ops_count + 1) * sizeof(*deferred_ops));
+        if (deferred_ops == NULL) {
+            perror("Couldn't realloc deferred_ops");
+            exit(EXIT_FAILURE);
+        }
+        deferred_ops[deferred_ops_count] = op;
+        deferred_ops_count++;
+
+        /* Free up the memory used by the file path */
+        free(filePath);
+    }
+
+    /* Now that all files and symbolic links have been created, 
+ *      * perform the deferred utime operations */
+    int i;    
+for (i = 0; i < deferred_ops_count; i++) {
+        if (utime(deferred_ops[i]->path, &(deferred_ops[i]->newTime))) {
+            perror("Couldn't set utime");
+            exit(errno);
+        }
+        free(deferred_ops[i]->path);
+        free(deferred_ops[i]);
+    }
+    free(deferred_ops);
+
+    /* Close the tar archive */
+    close(fd);
+
+    return 0;
+}
 
