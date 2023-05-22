@@ -26,6 +26,7 @@
 
 #include "util.h"
 
+/* used by extract to do utime after extraction is completed */
 struct deferred_utime_operation {
     char* path;
     struct utimbuf newTime;
@@ -34,47 +35,46 @@ struct deferred_utime_operation {
 /* Function to create all necessary paths along a given path */
 void check_dirs(char *path) {
     int i;
-    char *cpy;
+    char *temp_path;
 
-    /* Define default permissions */
+    /* Define default perms */
     mode_t perms = S_IRWXU | S_IRWXG | S_IROTH;
 
     errno = 0;
     /* Allocate memory for a copy of the path */
-    cpy = (char *)malloc((strlen(path) + 1) * sizeof(char));
+    temp_path = (char *)malloc((strlen(path) + 1) * sizeof(char));
     /* If allocation fails, output an error and exit */
-    if (cpy == NULL) {
+    if (temp_path == NULL) {
         perror("mytar");
         exit(EXIT_FAILURE);
     }
 
     /* Copy the path to the allocated memory */
-    strcpy(cpy, path);
+    strcpy(temp_path, path);
 
     /* Iterate over the copy of the path */
-    for (i = 0; cpy[i]; i++) {
+    for (i = 0; temp_path[i]; i++) {
         /* If a directory separator is found */
-        if (cpy[i] == '/') {
+        if (temp_path[i] == '/') {
             /* If it's the last character in the path, clean up and return */
             if (i >= strlen(path) - 1) {
-                free(cpy);
+                free(temp_path);
                 return;
             }
             /* Temporarily end the string at the current directory level */
-            cpy[i] = '\0';
+            temp_path[i] = '\0';
             /* Try to create the directory; 
              * it's not an error if it already exists */
-            if (mkdir(cpy, perms) && errno != EEXIST) {
+            if (mkdir(temp_path, perms) && errno != EEXIST) {
                 perror(path);
                 exit(EXIT_FAILURE);
             }
             /* Restore the directory separator */
-            cpy[i] = '/';
+            temp_path[i] = '/';
         }
     }
 
-    /* Clean up the copy of the path */
-    free(cpy);
+    free(temp_path);
 }
 
 /* Function to extract file content from an archive */
@@ -112,24 +112,21 @@ void extract_file_content(int infile, int outfile, size_t file_size) {
         exit(EXIT_FAILURE);
     }
 
-    /* Free up the memory used by the buffer */
     free(buff);
 }
 
 /* Function to extract a regular file from an archive */
 void extract_reg_file(int tarfile, const struct tarheader* header, char* path) {
-    /* File descriptor for the new file */
     int new_file;
-    /* Variable to store permissions for the new file */
-    mode_t permissions;
+    mode_t perms;
 
-    /* Convert file permissions from octal string to mode_t */
-    permissions = (mode_t)strtol(header->mode, NULL, OCTAL);
+    /* Convert file perms from octal string to mode_t */
+    perms = (mode_t)strtol(header->mode, NULL, OCTAL);
 
     errno = 0;
-    /* Open the new file with the given permissions,
+    /* Open the new file with the given perms,
      * creating it if it doesn't exist and truncating it if it does */
-    new_file = open(path, O_RDWR | O_CREAT | O_TRUNC, permissions);
+    new_file = open(path, O_RDWR | O_CREAT | O_TRUNC, perms);
     if (new_file == -1) {
         perror(path);
         exit(EXIT_FAILURE);
@@ -137,46 +134,45 @@ void extract_reg_file(int tarfile, const struct tarheader* header, char* path) {
 
     /* Extract file content from the archive and write to the new file */
     extract_file_content(tarfile, new_file, strtol(header->size, NULL, OCTAL));
-    /* Close the new file */
+
     close(new_file);
 }
 
 
 void extract_sym_link(int tarfile, struct tarheader* header, char* path) {
     /* Buffer to hold the target of the symbolic link */
-    char* linkValue;
+    char* link;
 
     errno = 0;
-    /* Allocate memory for the linkValue buffer */
-    linkValue = calloc(LINK_MAX + 1, sizeof(char));
-    if (linkValue == NULL) {
+    /* Allocate memory for the link buffer */
+    link = calloc(LINK_MAX + 1, sizeof(char));
+    if (link == NULL) {
         perror("mytar");
         exit(EXIT_FAILURE);
     }
 
     /* Copy the target of the symbolic link from the header to the buffer */
-    strncpy(linkValue, (char *)&header->linkname, LINK_MAX);
+    strncpy(link, (char *)&header->linkname, LINK_MAX);
 
     errno = 0;
     /* Create the symbolic link */
-    if (symlink(linkValue, path) && errno != EEXIST) {
+    if (symlink(link, path) && errno != EEXIST) {
         perror(path);
         exit(errno);
     }
 
-    /* Free up the memory used by the buffer */
-    free(linkValue);
+    free(link);
 }
 
 
 /* Function to extract a directory from an archive */
 void extract_directory(int tarfile,const struct tarheader* header,char* path) {
-    /* Variable to store permissions for the new directory */
-    mode_t permissions = (mode_t)strtol(header->mode, NULL, OCTAL);
+    /* Variable to store perms for the new directory */
+    mode_t perms = (mode_t)strtol(header->mode, NULL, OCTAL);
 
     errno = 0;
-    /* Create the new directory with the given permissions */
-    if (mkdir(path, permissions) && errno != EEXIST) {
+    /* Create the new directory with the given perms */
+    if (mkdir(path, perms) && errno != EEXIST) {
         perror(path);
         exit(EXIT_FAILURE);
     }
@@ -184,7 +180,6 @@ void extract_directory(int tarfile,const struct tarheader* header,char* path) {
 
 /* Function to extract files from a tar archive */
 void extract(char *filename,char **paths,int npaths, int verbose, int strict) {
-
     int tarfile;
     struct tarheader head;
     int i;
@@ -293,7 +288,7 @@ void extract(char *filename,char **paths,int npaths, int verbose, int strict) {
                 exit(EXIT_FAILURE);
         }
 
-        /* Get file stats */
+        /* Get file info */
         if (lstat(path, &statBuffer)) {
             perror("path");
             exit(errno);
@@ -343,7 +338,5 @@ void extract(char *filename,char **paths,int npaths, int verbose, int strict) {
     }
     free(deferred_ops);
 
-    /* Close the tar archive */
     close(tarfile);
 }
-
