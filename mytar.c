@@ -2,7 +2,7 @@
  * file: mytar.c
  * 
  * processes all the args and files/paths
- * based on cxt args, figures out what mode to go into
+ * based on c/x/t args, chooses which mode to go into
  *
  */
 
@@ -22,7 +22,13 @@
 #define TFILE 2
 #define PATHS 3
 
-void print_usage(void);
+/*
+ * print the usage message error
+ */
+void print_usage(void) {
+    fprintf(stderr, "usage: mytar [ctxvS]f tarfile [ path [ ... ] ]\n");
+    exit(EXIT_FAILURE);
+}
 
 int main(int argc, char *argv[]) {
     int verbose=0, strict=0; /* booleans for v and S option */
@@ -58,7 +64,7 @@ int main(int argc, char *argv[]) {
             strict = 1;
         } else {
             /* catch an unknown option */
-            fprintf(stderr, "unknown option: %s\n", argv[OPS][i]);
+            fprintf(stderr, "unknown option: %c\n", argv[OPS][i]);
             print_usage();
         }
     }
@@ -73,7 +79,7 @@ int main(int argc, char *argv[]) {
     } else {
         if ((paths = malloc((sizeof(char *)) * (argc - PATHS))) == NULL) {
             perror("mytar");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
 
         for (i=0, j=PATHS; j < argc; i++, j++) {
@@ -96,12 +102,4 @@ int main(int argc, char *argv[]) {
 
     free(paths);
     return 0;
-}
-
-/*
- * print the usage message error
- */
-void print_usage(void) {
-    fprintf(stderr, "usage: mytar [ctxvS]f tarfile [ path [ ... ] ]\n");
-    exit(1);
 }

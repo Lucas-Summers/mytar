@@ -9,6 +9,7 @@
 
 #define PATH_MAX_ 256
 #define NAME_MAX_ 100
+#define PREFIX_MAX 155
 #define UGNAME_MAX 32
 #define ID_MAX 07777777
 #define SIZE_MAX_ 077777777777
@@ -29,7 +30,6 @@
 #define CHKSUM_BEGIN 148
 #define CHKSUM_END 155
 #define OCTAL 8
-
 
 #define MODE_MASK 07777
 #define PERM_MASK 256
@@ -59,6 +59,7 @@ struct __attribute__ ((__packed__)) tarheader {
 };
 
 int calculate_checksum(unsigned char *head);
+int check_currupt_archive(int tarfile, struct tarheader *head, int strict);
 int insert_special_int(char *where, size_t size, int32_t val);
 uint32_t extract_special_int(char *where, int len);
 

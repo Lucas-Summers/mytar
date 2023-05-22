@@ -7,6 +7,9 @@
 #include <arpa/inet.h> 
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "util.h"
 
@@ -27,6 +30,67 @@ int calculate_checksum(unsigned char *head) {
     }
 
     return sum;
+}
+
+/*
+ * checks that a given header is not currupted
+ * first checks if we are at the stop blocks
+ * then, check if the chksum in the header is equal to what we expect
+ * then, checks if the magic and version are correct
+ */
+int check_currupt_archive(int tarfile, struct tarheader *head, int strict) {
+    int chksum, expected_chksum;
+    int next_chksum, next_expected_chksum;
+    
+    chksum = strtol(head->chksum, NULL, OCTAL);
+    expected_chksum = calculate_checksum((unsigned char *)head);
+    
+    /* if the block is all zeros (stop block?) */
+    if (chksum == 0 && expected_chksum == EMPTY_CHKSUM) {
+        /* read in the next block to check the second stop block */ 
+        if (read(tarfile, head, BLOCK) == -1) {
+            perror("mytar");
+            exit(1);
+        }
+        next_chksum = strtol(head->chksum, NULL, OCTAL);
+        next_expected_chksum = calculate_checksum((unsigned char *)head);
+        
+        /* if the second stop block checks out, finish successfully */
+        if (next_chksum == 0 && next_expected_chksum == EMPTY_CHKSUM) {
+            return 0;
+        /* else, the file must be currupt */
+        } else {
+            fprintf(stderr, "error: currupted archive\n");
+            exit(1);
+        }
+    }
+    
+    /* if the chksums don't match, archive must be currupt */
+    if (chksum != expected_chksum) {
+        fprintf(stderr, "error: currupted archive\n");
+        exit(1);
+    }
+    
+    /* strict mode checks ustar/0 and 00 */
+    if (strict) {
+        if (strcmp("ustar", head->magic) != 0) {
+            fprintf(stderr, "error: header magic is not correct\n");
+            exit(1);
+        }
+        if (strncmp("00", head->version, VERSION_SIZE) != 0) {
+            fprintf(stderr, "error: header version is not correct\n");
+            exit(1);
+        }
+    /* non-strict just checks the first 5 chars of magic */
+    } else {
+        if (strncmp("ustar", head->magic, MAGIC_SIZE) != 0) {
+            fprintf(stderr, "error: header magic is not correct\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+    
+    /* lets the caller know we have not hit the end of the archive */
+    return 1;
 }
 
 /* given by assignment */

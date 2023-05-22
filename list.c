@@ -33,7 +33,7 @@ void next_header(int tarfile, long size) {
         /* seek by the number of blocks it takes to house the size */
         if (lseek(tarfile, (size / BLOCK + 1) * BLOCK, SEEK_CUR) == -1) {
             perror("mytar");
-            exit(1);
+            exit(EXIT_FAILURE);
         } 
     } 
 }
@@ -51,7 +51,7 @@ char *get_name(struct tarheader *head, char **paths, int npaths) {
     /* leave room for / and /0 */
     if ((name = calloc(PATH_MAX_ + 2, sizeof(char))) == NULL) {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     /* if prefix is there, add prefix and name together */
@@ -94,7 +94,7 @@ char *get_perms(struct tarheader *head) {
     /* populate with the default (all perms provided) */
     if ((perms = (char *)malloc(sizeof(char)*(PERM_STRLEN+1))) == NULL) {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     strcpy(perms, "-rwxrwxrwx");
     
@@ -139,7 +139,7 @@ char *get_mtime(struct tarheader *head) {
     /* the final string must fit within 17 chars because of the format */
     if ((mtime = calloc(MTIME_STRLEN+1, sizeof(char))) == NULL) {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     /* create the time structure to be able to format */
@@ -148,7 +148,7 @@ char *get_mtime(struct tarheader *head) {
     /* formats to a string like 2004-05-10 10:43 */
     if (strftime(mtime, MTIME_STRLEN+1, "%Y-%m-%d %H:%M", tm) == 0) {
         perror("mypwd");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     return mtime;
@@ -164,7 +164,7 @@ char *get_owner(struct tarheader *head) {
     /* must fit into 64 chars by the specification */
     if ((owner = calloc(OWNER_STRLEN+1, sizeof(char))) == NULL) {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     /* prefer to use the user name and group name in the header */
@@ -189,66 +189,6 @@ char *get_owner(struct tarheader *head) {
     }
 
     return owner;
-}
-
-/*
- * first checks if we are at the stop blocks
- * then, check if the chksum in the header is equal to what we expect
- * then, checks if the magic and version are correct
- */
-int check_currupt_archive(int tarfile, struct tarheader *head, int strict) {
-    int chksum, expected_chksum;
-    int next_chksum, next_expected_chksum;
-    
-    chksum = strtol(head->chksum, NULL, OCTAL);
-    expected_chksum = calculate_checksum((unsigned char *)head);
-    
-    /* if the block is all zeros (stop block?) */
-    if (chksum == 0 && expected_chksum == EMPTY_CHKSUM) {
-        /* read in the next block to check the second stop block */ 
-        if (read(tarfile, head, BLOCK) == -1) {
-            perror("mytar");
-            exit(1);
-        }
-        next_chksum = strtol(head->chksum, NULL, OCTAL);
-        next_expected_chksum = calculate_checksum((unsigned char *)head);
-        
-        /* if the second stop block checks out, finish successfully */
-        if (next_chksum == 0 && next_expected_chksum == EMPTY_CHKSUM) {
-            return 0;
-        /* else, the file must be currupt */
-        } else {
-            fprintf(stderr, "error: currupted archive\n");
-            exit(1);
-        }
-    }
-    
-    /* if the chksums don't match, archive must be currupt */
-    if (chksum != expected_chksum) {
-        fprintf(stderr, "error: currupted archive\n");
-        exit(1);
-    }
-    
-    /* strict mode checks ustar/0 and 00 */
-    if (strict) {
-        if (strcmp("ustar", head->magic) != 0) {
-            fprintf(stderr, "error: header magic is not correct\n");
-            exit(1);
-        }
-        if (strncmp("00", head->version, VERSION_SIZE) != 0) {
-            fprintf(stderr, "error: header version is not correct\n");
-            exit(1);
-        }
-    /* non-strict just checks the first 5 chars of magic */
-    } else {
-        if (strncmp("ustar", head->magic, MAGIC_SIZE) != 0) {
-            fprintf(stderr, "error: header magic is not correct\n");
-            exit(1);
-        }
-    }
-    
-    /* lets the caller know we have not hit the end of the archive */
-    return 1;
 }
 
 /*
@@ -288,13 +228,13 @@ void list(char *filename, char **paths, int npaths, int verbose, int strict) {
         }
     } else {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     /* open just to read */
     if ((tarfile = open(filename, O_RDONLY)) == -1) {
         perror(filename);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     /* we should only be reading in headers */

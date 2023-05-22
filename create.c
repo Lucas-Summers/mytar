@@ -38,7 +38,7 @@ void write_stop_blocks(int tarfile) {
     /* two 512 byte blocks */
     if ((stop_blocks = (char *)malloc(sizeof(char) * BLOCK*2)) == NULL) {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     /* zero out the blocks */
@@ -49,7 +49,7 @@ void write_stop_blocks(int tarfile) {
     /* should be at the end of the file */
     if (write(tarfile, stop_blocks, BLOCK*2) == -1) {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     free(stop_blocks);
@@ -103,7 +103,7 @@ int write_header(int tarfile, char *path, struct stat *st,
         }
         if (insert_special_int(head.uid, ID_SIZE, st->st_uid) == -1) {
             perror("mytar");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     } else {
         /* sprintf helps us format it as a specific length octal */
@@ -120,7 +120,7 @@ int write_header(int tarfile, char *path, struct stat *st,
         /* encode it as a regular binary number if too large */
         if (insert_special_int(head.gid, ID_SIZE, st->st_gid)) {
             perror("mytar");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     } else {
         sprintf(head.gid, "%07o", st->st_gid);
@@ -179,7 +179,7 @@ int write_header(int tarfile, char *path, struct stat *st,
     /* retrieve the group name with file gid */
     if (!(gr = getgrgid(st->st_gid))) {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     /* truncate name if necessary to fit within field */
@@ -192,7 +192,7 @@ int write_header(int tarfile, char *path, struct stat *st,
     /* retrieve user name with the files uid */
     if (!(pw = getpwuid(st->st_uid))) {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     /* truncate name if necessary to fit within field */
@@ -208,7 +208,7 @@ int write_header(int tarfile, char *path, struct stat *st,
     /* write the header to the outfile */
     if (write(tarfile, &head, BLOCK) == -1) {
         perror("mytar");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     return 0;
@@ -257,7 +257,7 @@ void write_tar(int tarfile, char *path, int verbose, int strict) {
 
                 if (write(tarfile, buf, BLOCK) == -1) {
                     perror("mytar");
-                    exit(1);
+                    exit(EXIT_FAILURE);
                 }
                 
                 /* zero out the buf again */
@@ -289,7 +289,7 @@ void write_tar(int tarfile, char *path, int verbose, int strict) {
         /* something to put the new path into */
         if ((path_new = (char *)malloc(PATH_MAX_)) == NULL) {
             perror("mytar");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         
         /* skip writing dir to archive if cannot open */
@@ -334,7 +334,7 @@ void create(char *filename, char **paths, int npaths, int verbose, int strict) {
     if ((tarfile = open(filename, O_RDWR | O_CREAT | O_TRUNC, 
                             S_IRUSR | S_IWUSR | S_IRGRP)) == -1) {
         perror(filename);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     
     /* go through all the paths passed in and archive them */
