@@ -4,10 +4,10 @@ A simple, fully functional GNU tar clone
 ## Usage
 First, compile:
 ```bash
-make 
+make clean && make
 ```
 
-All the basic operations are supported:
+All the basic tar operations are supported:
 ```bash
 ./mytar cf archive.tar file1.txt dir1/     # Create archive.tar with file1.txt and file2.txt
 ./mytar tf archive.tar                     # List contents of archive.tar
@@ -16,5 +16,5 @@ All the basic operations are supported:
 
 Additional flags:
 - `v`: verbose program output
-- `S`: strict in interpretation of the POSIX standard
+- `S`: strict in interpretation of the Ustar POSIX standard
 
