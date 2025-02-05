@@ -10,9 +10,6 @@ OBJ = $(SRC:.c=.o)
 
 all: mytar
 
-test:
-	~pn-cs357/demos/tryAsgn4
-
 clean:
 	rm -f $(OBJ) mytar
 

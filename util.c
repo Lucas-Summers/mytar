@@ -93,7 +93,6 @@ int check_currupt_archive(int tarfile, struct tarheader *head, int strict) {
     return 1;
 }
 
-/* given by assignment */
 uint32_t extract_special_int(char *where, int len) {
     /* For interoperability with GNU tar. GNU seems to
     * set the high–order bit of the first byte, then
@@ -112,7 +111,6 @@ uint32_t extract_special_int(char *where, int len) {
     return val;
 }
 
-/* given by assignment */
 int insert_special_int(char *where, size_t size, int32_t val) { 
     /* For interoperability with GNU tar. GNU seems to
     * set the high–order bit of the first byte, then
